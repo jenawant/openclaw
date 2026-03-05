@@ -27,6 +27,7 @@ type LifecycleHost = {
   assistantName: string;
   assistantAvatar: string | null;
   assistantAgentId: string | null;
+  serverVersion: string | null;
   authLoading: boolean;
   authEnabled: boolean;
   authViewer: import("./controllers/auth.ts").AuthViewer | null;
@@ -51,13 +52,20 @@ type LifecycleHost = {
 };
 
 export function handleConnected(host: LifecycleHost) {
+  const connectGeneration = ++host.connectGeneration;
   host.basePath = inferBasePath();
-  void loadControlUiBootstrapConfig(host);
+  const bootstrapReady = loadControlUiBootstrapConfig(host);
   applySettingsFromUrl(host as unknown as Parameters<typeof applySettingsFromUrl>[0]);
   syncTabWithLocation(host as unknown as Parameters<typeof syncTabWithLocation>[0], true);
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   attachThemeListener(host as unknown as Parameters<typeof attachThemeListener>[0]);
   window.addEventListener("popstate", host.popStateHandler);
+  void bootstrapReady.finally(() => {
+    if (host.connectGeneration !== connectGeneration) {
+      return;
+    }
+    connectGateway(host as unknown as Parameters<typeof connectGateway>[0]);
+  });
   void bootstrapAuthAndMaybeConnect(host);
   startNodesPolling(host as unknown as Parameters<typeof startNodesPolling>[0]);
   if (host.tab === "logs") {
@@ -73,6 +81,7 @@ export function handleFirstUpdated(host: LifecycleHost) {
 }
 
 export function handleDisconnected(host: LifecycleHost) {
+  host.connectGeneration += 1;
   window.removeEventListener("popstate", host.popStateHandler);
   stopNodesPolling(host as unknown as Parameters<typeof stopNodesPolling>[0]);
   stopLogsPolling(host as unknown as Parameters<typeof stopLogsPolling>[0]);
