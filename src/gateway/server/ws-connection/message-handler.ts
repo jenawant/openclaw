@@ -32,11 +32,13 @@ import {
   CANVAS_CAPABILITY_TTL_MS,
   mintCanvasCapabilityToken,
 } from "../../canvas-capability.js";
+import { resolveControlUiViewerFromRequest } from "../../control-ui-auth.js";
 import {
   buildDeviceAuthPayload,
   buildDeviceAuthPayloadV3,
   normalizeDeviceMetadataForAuth,
 } from "../../device-auth.js";
+import { CLI_DEFAULT_OPERATOR_SCOPES, READ_SCOPE, WRITE_SCOPE } from "../../method-scopes.js";
 import {
   isLocalishHost,
   isLoopbackAddress,
@@ -76,7 +78,11 @@ import {
   refreshGatewayHealthSnapshot,
 } from "../health-state.js";
 import type { GatewayWsClient } from "../ws-types.js";
-import { resolveConnectAuthDecision, resolveConnectAuthState } from "./auth-context.js";
+import {
+  resolveConnectAuthDecision,
+  resolveConnectAuthState,
+  type DeviceTokenCandidateSource,
+} from "./auth-context.js";
 import { formatGatewayAuthFailureMessage, type AuthProvidedKind } from "./auth-messages.js";
 import {
   evaluateMissingDeviceIdentity,
@@ -90,6 +96,7 @@ type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
 const DEVICE_SIGNATURE_SKEW_MS = 2 * 60 * 1000;
 const BROWSER_ORIGIN_LOOPBACK_RATE_LIMIT_IP = "198.18.0.1";
+const LOCAL_AUTH_USER_SCOPES = [READ_SCOPE, WRITE_SCOPE] as const;
 
 export type WsOriginCheckMetrics = {
   hostHeaderFallbackAccepted: number;
@@ -478,7 +485,7 @@ export function attachGatewayWsMessageHandler(params: {
         }
 
         const roleRaw = connectParams.role ?? "operator";
-        const role = parseGatewayRole(roleRaw);
+        let role = parseGatewayRole(roleRaw);
         if (!role) {
           markHandshakeFailure("invalid-role", {
             role: roleRaw,
@@ -495,6 +502,29 @@ export function attachGatewayWsMessageHandler(params: {
         connectParams.scopes = scopes;
 
         const isControlUi = connectParams.client.id === GATEWAY_CLIENT_IDS.CONTROL_UI;
+        const localAuthEnabled = configSnapshot.gateway?.controlUi?.localAuth?.enabled === true;
+        const localAuthViewer = isControlUi
+          ? resolveControlUiViewerFromRequest({
+              req: upgradeReq,
+              cfg: configSnapshot,
+            })
+          : null;
+        const usingLocalAuthViewer = localAuthEnabled && Boolean(localAuthViewer);
+        if (isControlUi && localAuthEnabled && !localAuthViewer) {
+          markHandshakeFailure("control-ui-local-auth-required");
+          sendHandshakeErrorResponse(ErrorCodes.INVALID_REQUEST, "control ui login required");
+          close(1008, "control ui login required");
+          return;
+        }
+        if (usingLocalAuthViewer) {
+          role = "operator";
+          scopes =
+            localAuthViewer?.role === "admin"
+              ? [...CLI_DEFAULT_OPERATOR_SCOPES]
+              : [...LOCAL_AUTH_USER_SCOPES];
+          connectParams.role = role;
+          connectParams.scopes = scopes;
+        }
         const isWebchat = isWebchatConnect(connectParams);
         if (enforceOriginCheckForAnyClient || isControlUi || isWebchat) {
           const hostHeaderOriginFallbackEnabled =
@@ -531,7 +561,7 @@ export function attachGatewayWsMessageHandler(params: {
           }
         }
 
-        const deviceRaw = connectParams.device;
+        const deviceRaw = usingLocalAuthViewer ? null : connectParams.device;
         let devicePublicKey: string | null = null;
         let deviceAuthPayloadVersion: "v2" | "v3" | null = null;
         const hasTokenAuth = Boolean(connectParams.auth?.token);
@@ -544,23 +574,38 @@ export function attachGatewayWsMessageHandler(params: {
         });
         const device = controlUiAuthPolicy.device;
 
-        let {
-          authResult,
-          authOk,
-          authMethod,
-          sharedAuthOk,
-          deviceTokenCandidate,
-          deviceTokenCandidateSource,
-        } = await resolveConnectAuthState({
-          resolvedAuth,
-          connectAuth: connectParams.auth,
-          hasDeviceIdentity: Boolean(device),
-          req: upgradeReq,
-          trustedProxies,
-          allowRealIpFallback,
-          rateLimiter: authRateLimiter,
-          clientIp: browserRateLimitClientIp,
-        });
+        let authResult: GatewayAuthResult;
+        let authOk: boolean;
+        let authMethod: GatewayAuthResult["method"];
+        let sharedAuthOk: boolean;
+        let deviceTokenCandidate: string | undefined;
+        let deviceTokenCandidateSource: DeviceTokenCandidateSource | undefined;
+        if (usingLocalAuthViewer) {
+          authResult = { ok: true, method: "none" };
+          authOk = true;
+          authMethod = "none";
+          sharedAuthOk = true;
+          deviceTokenCandidate = undefined;
+          deviceTokenCandidateSource = undefined;
+        } else {
+          ({
+            authResult,
+            authOk,
+            authMethod,
+            sharedAuthOk,
+            deviceTokenCandidate,
+            deviceTokenCandidateSource,
+          } = await resolveConnectAuthState({
+            resolvedAuth,
+            connectAuth: connectParams.auth,
+            hasDeviceIdentity: Boolean(device),
+            req: upgradeReq,
+            trustedProxies,
+            allowRealIpFallback,
+            rateLimiter: authRateLimiter,
+            clientIp: browserRateLimitClientIp,
+          }));
+        }
         const rejectUnauthorized = (failedAuth: GatewayAuthResult) => {
           markHandshakeFailure("unauthorized", {
             authMode: resolvedAuth.mode,
@@ -605,6 +650,9 @@ export function attachGatewayWsMessageHandler(params: {
           }
         };
         const handleMissingDeviceIdentity = (): boolean => {
+          if (usingLocalAuthViewer) {
+            return true;
+          }
           if (!device) {
             clearUnboundScopes();
           }
@@ -1063,6 +1111,7 @@ export function attachGatewayWsMessageHandler(params: {
           canvasHostUrl,
           canvasCapability,
           canvasCapabilityExpiresAtMs,
+          authUser: localAuthViewer ?? undefined,
         };
         setClient(nextClient);
         setHandshakeState("connected");

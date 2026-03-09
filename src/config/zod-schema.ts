@@ -600,6 +600,61 @@ export const OpenClawSchema = z
         customBindHost: z.string().optional(),
         controlUi: z
           .object({
+            localAuth: z
+              .object({
+                enabled: z.boolean().optional(),
+                sessionSecret: SecretInputSchema.optional().register(sensitive),
+                sessionTtlHours: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(24 * 30)
+                  .optional(),
+                users: z
+                  .array(
+                    z
+                      .object({
+                        username: z.string().min(1),
+                        passwordHash: z.string().min(1).register(sensitive),
+                        role: z.union([z.literal("admin"), z.literal("user")]),
+                        agentId: z.string().min(1),
+                        allowedChannels: z
+                          .array(
+                            z
+                              .object({
+                                channel: z.string().min(1),
+                                accountId: z.string().optional(),
+                              })
+                              .strict(),
+                          )
+                          .optional(),
+                        disabled: z.boolean().optional(),
+                      })
+                      .strict(),
+                  )
+                  .optional(),
+              })
+              .strict()
+              .superRefine((value, ctx) => {
+                const users = value.users ?? [];
+                const seen = new Set<string>();
+                users.forEach((entry, index) => {
+                  const normalized = entry.username.trim().toLowerCase();
+                  if (!normalized) {
+                    return;
+                  }
+                  if (seen.has(normalized)) {
+                    ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      path: ["users", index, "username"],
+                      message: `duplicate username: ${entry.username}`,
+                    });
+                    return;
+                  }
+                  seen.add(normalized);
+                });
+              })
+              .optional(),
             enabled: z.boolean().optional(),
             basePath: z.string().optional(),
             root: z.string().optional(),

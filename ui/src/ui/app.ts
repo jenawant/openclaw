@@ -53,13 +53,20 @@ import {
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import type { ControlUiUserEntry } from "./controllers/auth-users.ts";
+import {
+  loginControlUi as loginControlUiInternal,
+  logoutControlUi as logoutControlUiInternal,
+  type AuthViewer,
+} from "./controllers/auth.ts";
 import type { CronFieldErrors } from "./controllers/cron.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
+import type { WizardStep } from "./controllers/onboarding-wizard.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
-import type { Tab } from "./navigation.ts";
+import { isTabAllowedForRole, type Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import type { ResolvedTheme, ThemeMode } from "./theme.ts";
 import type {
@@ -122,6 +129,12 @@ export class OpenClawApp extends LitElement {
   @state() tab: Tab = "chat";
   @state() onboarding = resolveOnboardingMode();
   @state() connected = false;
+  @state() authLoading = false;
+  @state() authEnabled = false;
+  @state() authViewer: AuthViewer | null = null;
+  @state() authError: string | null = null;
+  @state() authUsername = "";
+  @state() authPassword = "";
   @state() theme: ThemeMode = this.settings.theme ?? "system";
   @state() themeResolved: ResolvedTheme = "dark";
   @state() hello: GatewayHelloOk | null = null;
@@ -197,6 +210,64 @@ export class OpenClawApp extends LitElement {
   @state() configSearchQuery = "";
   @state() configActiveSection: string | null = null;
   @state() configActiveSubsection: string | null = null;
+  @state() authUsersLoading = false;
+  @state() authUsersError: string | null = null;
+  @state() authUsersList: ControlUiUserEntry[] = [];
+  @state() authUsersDbPath: string | null = null;
+  @state() authUsersSelected: string | null = null;
+  @state() authUsersSaving = false;
+  @state() authUsersDeleting = false;
+  @state() authUsersWizardStep: 1 | 2 | 3 | 4 | 5 = 1;
+  @state() authUsersAutoBootstrap = true;
+  @state() authUsersBootstrapBusy = false;
+  @state() authUsersBootstrapError: string | null = null;
+  @state() authUsersChannelWarnings: string[] = [];
+  @state() authUsersChannelDraftChannel = "";
+  @state() authUsersChannelDraftAccountId = "";
+  @state() authUsersCreateAgentOpen = false;
+  @state() authUsersCreateAgentBusy = false;
+  @state() authUsersCreateAgentError: string | null = null;
+  @state() authUsersCreateAgentForm: {
+    name: string;
+    workspace: string;
+    model: string;
+  } = {
+    name: "",
+    workspace: "",
+    model: "",
+  };
+  @state() authUsersForm: {
+    username: string;
+    role: "admin" | "user";
+    agentId: string;
+    workspace: string;
+    agentDir: string;
+    mainSessionKey: string;
+    agentModel: string;
+    password: string;
+    passwordHash: string;
+    disabled: boolean;
+    allowedChannelsText: string;
+  } = {
+    username: "",
+    role: "user",
+    agentId: "",
+    workspace: "",
+    agentDir: "",
+    mainSessionKey: "main",
+    agentModel: "",
+    password: "",
+    passwordHash: "",
+    disabled: false,
+    allowedChannelsText: "",
+  };
+  @state() onboardingWizardSessionId: string | null = null;
+  @state() onboardingWizardStep: WizardStep | null = null;
+  @state() onboardingWizardStatus: "idle" | "running" | "done" | "cancelled" | "error" = "idle";
+  @state() onboardingWizardError: string | null = null;
+  @state() onboardingWizardBusy = false;
+  @state() onboardingWizardDraft: unknown = null;
+  @state() onboardingWizardDraftStepId: string | null = null;
 
   @state() channelsLoading = false;
   @state() channelsSnapshot: ChannelsStatusSnapshot | null = null;
@@ -417,6 +488,9 @@ export class OpenClawApp extends LitElement {
   }
 
   connect() {
+    if (this.authEnabled && !this.authViewer) {
+      return;
+    }
     connectGatewayInternal(this as unknown as Parameters<typeof connectGatewayInternal>[0]);
   }
 
@@ -464,6 +538,10 @@ export class OpenClawApp extends LitElement {
   }
 
   setTab(next: Tab) {
+    const role = this.authViewer?.role ?? null;
+    if (!isTabAllowedForRole(next, role)) {
+      next = "chat";
+    }
     setTabInternal(this as unknown as Parameters<typeof setTabInternal>[0], next);
   }
 
@@ -580,6 +658,14 @@ export class OpenClawApp extends LitElement {
 
   handleGatewayUrlCancel() {
     this.pendingGatewayUrl = null;
+  }
+
+  async loginControlUi() {
+    await loginControlUiInternal(this as unknown as Parameters<typeof loginControlUiInternal>[0]);
+  }
+
+  async logoutControlUi() {
+    await logoutControlUiInternal(this as unknown as Parameters<typeof logoutControlUiInternal>[0]);
   }
 
   // Sidebar handlers for tool output viewing

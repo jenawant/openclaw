@@ -22,6 +22,7 @@ import {
 } from "./auth-rate-limit.js";
 import { type GatewayAuthResult, type ResolvedGatewayAuth } from "./auth.js";
 import { normalizeCanvasScopedUrl } from "./canvas-capability.js";
+import { handleControlUiAuthHttpRequest } from "./control-ui-auth.js";
 import {
   handleControlUiAvatarRequest,
   handleControlUiHttpRequest,
@@ -669,6 +670,16 @@ export function createGatewayHttpServer(opts: {
       );
 
       if (controlUiEnabled) {
+        requestStages.push({
+          name: "control-ui-auth",
+          run: () =>
+            handleControlUiAuthHttpRequest({
+              req,
+              res,
+              cfg: configSnapshot,
+              basePath: controlUiBasePath,
+            }),
+        });
         requestStages.push({
           name: "control-ui-avatar",
           run: () =>

@@ -2,6 +2,7 @@ import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
 } from "../../../src/gateway/events.js";
+import { buildAgentMainSessionKey } from "../../../src/routing/session-key.js";
 import { CHAT_SESSIONS_ACTIVE_MINUTES, flushChatQueueForEvent } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import {
@@ -75,6 +76,7 @@ type GatewayHost = {
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
   updateAvailable: UpdateAvailable | null;
+  authViewer?: { role: "admin" | "user"; agentId: string; mainSessionKey: string } | null;
 };
 
 type SessionDefaultsSnapshot = {
@@ -107,6 +109,19 @@ function normalizeSessionKeyForDefaults(
 }
 
 function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnapshot) {
+  if (host.authViewer?.role === "user") {
+    const ownMainSessionKey = buildAgentMainSessionKey({
+      agentId: host.authViewer.agentId,
+      mainKey: host.authViewer.mainSessionKey,
+    });
+    host.sessionKey = ownMainSessionKey;
+    applySettings(host as unknown as Parameters<typeof applySettings>[0], {
+      ...host.settings,
+      sessionKey: ownMainSessionKey,
+      lastActiveSessionKey: ownMainSessionKey,
+    });
+    return;
+  }
   if (!defaults?.mainSessionKey) {
     return;
   }
@@ -170,8 +185,10 @@ export function connectGateway(host: GatewayHost) {
       void loadAssistantIdentity(host as unknown as OpenClawApp);
       void loadAgents(host as unknown as OpenClawApp);
       void loadToolsCatalog(host as unknown as OpenClawApp);
-      void loadNodes(host as unknown as OpenClawApp, { quiet: true });
-      void loadDevices(host as unknown as OpenClawApp, { quiet: true });
+      if (host.authViewer?.role !== "user") {
+        void loadNodes(host as unknown as OpenClawApp, { quiet: true });
+        void loadDevices(host as unknown as OpenClawApp, { quiet: true });
+      }
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason, error }) => {

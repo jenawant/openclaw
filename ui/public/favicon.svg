@@ -1,22 +1,18 @@
-<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="lobster-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff4d4d"/>
-      <stop offset="100%" stop-color="#991b1b"/>
-    </linearGradient>
-  </defs>
-  <!-- Body -->
-  <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lobster-gradient)"/>
-  <!-- Left Claw -->
-  <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#lobster-gradient)"/>
-  <!-- Right Claw -->
-  <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#lobster-gradient)"/>
-  <!-- Antenna -->
-  <path d="M45 15 Q35 5 30 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round"/>
-  <path d="M75 15 Q85 5 90 8" stroke="#ff4d4d" stroke-width="3" stroke-linecap="round"/>
-  <!-- Eyes -->
-  <circle cx="45" cy="35" r="6" fill="#050810"/>
-  <circle cx="75" cy="35" r="6" fill="#050810"/>
-  <circle cx="46" cy="34" r="2.5" fill="#00e5cc"/>
-  <circle cx="76" cy="34" r="2.5" fill="#00e5cc"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1328 1328" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,1077.67,1352.53)">
+        <g>
+            <g>
+                <g>
+                    <rect x="-1077.67" y="-1352.53" width="380.844" height="380.844" style="fill:rgb(10,10,10);fill-opacity:0;"/>
+                    <g transform="matrix(1,0,0,1,-0.83,-0.829998)">
+                        <g>
+                            <path d="M-408.569,-1341.41C-771.791,-1341.41 -1066.55,-1046.65 -1066.55,-683.434C-1066.55,-318.606 -771.791,-23.849 -408.569,-23.849C-43.741,-23.849 251.016,-318.606 251.016,-683.434C251.016,-1046.65 -43.741,-1341.41 -408.569,-1341.41ZM-317.731,-160.911C-121.717,-227.767 18.426,-414.268 18.426,-632.522C18.426,-908.12 -204.651,-1131.2 -480.249,-1131.2C-663.4,-1131.2 -824.311,-1032.45 -910.326,-884.271C-830.608,-1077.07 -641.16,-1214 -419.69,-1214C-124.933,-1214 112.347,-974.976 112.347,-681.961C112.347,-423.78 -72.412,-208.742 -317.731,-160.911Z" style="fill:rgb(51,51,51);fill-rule:nonzero;"/>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
 </svg>

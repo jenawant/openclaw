@@ -21,6 +21,13 @@ export type UiSettings = {
 export function loadSettings(): UiSettings {
   const defaultUrl = (() => {
     const proto = location.protocol === "https:" ? "wss" : "ws";
+    const isLocalDevUi =
+      Boolean(import.meta.env?.DEV) &&
+      (location.hostname === "localhost" || location.hostname === "127.0.0.1") &&
+      location.port === "5173";
+    if (isLocalDevUi) {
+      return `${proto}://${location.host}/openclaw-ws`;
+    }
     const configured =
       typeof window !== "undefined" &&
       typeof window.__OPENCLAW_CONTROL_UI_BASE_PATH__ === "string" &&
@@ -51,10 +58,24 @@ export function loadSettings(): UiSettings {
     }
     const parsed = JSON.parse(raw) as Partial<UiSettings>;
     return {
-      gatewayUrl:
-        typeof parsed.gatewayUrl === "string" && parsed.gatewayUrl.trim()
-          ? parsed.gatewayUrl.trim()
-          : defaults.gatewayUrl,
+      gatewayUrl: (() => {
+        const configuredUrl =
+          typeof parsed.gatewayUrl === "string" && parsed.gatewayUrl.trim()
+            ? parsed.gatewayUrl.trim()
+            : defaults.gatewayUrl;
+        if (
+          configuredUrl === `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`
+        ) {
+          const isLocalDevUi =
+            Boolean(import.meta.env?.DEV) &&
+            (location.hostname === "localhost" || location.hostname === "127.0.0.1") &&
+            location.port === "5173";
+          if (isLocalDevUi) {
+            return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/openclaw-ws`;
+          }
+        }
+        return configuredUrl;
+      })(),
       token: typeof parsed.token === "string" ? parsed.token : defaults.token,
       sessionKey:
         typeof parsed.sessionKey === "string" && parsed.sessionKey.trim()

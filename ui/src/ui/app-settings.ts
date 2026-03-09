@@ -10,6 +10,7 @@ import type { OpenClawApp } from "./app.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
+import { loadAuthUsers, validateAuthUsersAllowedChannels } from "./controllers/auth-users.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import {
@@ -23,11 +24,13 @@ import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
+import { refreshOnboardingWizard } from "./controllers/onboarding-wizard.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import {
   inferBasePathFromPathname,
+  isTabAllowedForRole,
   normalizeBasePath,
   normalizePath,
   pathForTab,
@@ -47,6 +50,10 @@ type SettingsHost = {
   applySessionKey: string;
   sessionKey: string;
   tab: Tab;
+  authViewer?: import("./controllers/auth.ts").AuthViewer | null;
+  onboardingWizardSessionId: string | null;
+  onboardingWizardStatus: "idle" | "running" | "done" | "cancelled" | "error";
+  onboardingWizardBusy: boolean;
   connected: boolean;
   chatHasAutoScrolled: boolean;
   logsAtBottom: boolean;
@@ -224,6 +231,19 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "config") {
     await loadConfigSchema(host as unknown as OpenClawApp);
     await loadConfig(host as unknown as OpenClawApp);
+    await loadAuthUsers(host as unknown as OpenClawApp);
+  }
+  if (host.tab === "users") {
+    await Promise.all([
+      loadAuthUsers(host as unknown as OpenClawApp),
+      loadChannels(host as unknown as OpenClawApp, false),
+      loadAgents(host as unknown as OpenClawApp),
+      loadConfig(host as unknown as OpenClawApp),
+    ]);
+    validateAuthUsersAllowedChannels(host as unknown as OpenClawApp);
+  }
+  if (host.tab === "onboarding") {
+    await refreshOnboardingWizard(host as unknown as OpenClawApp);
   }
   if (host.tab === "debug") {
     await loadDebug(host as unknown as OpenClawApp);
@@ -305,7 +325,7 @@ export function syncTabWithLocation(host: SettingsHost, replace: boolean) {
   }
   const resolved = tabFromPath(window.location.pathname, host.basePath) ?? "chat";
   setTabFromRoute(host, resolved);
-  syncUrlWithTab(host, resolved, replace);
+  syncUrlWithTab(host, resolveAllowedTab(host, resolved), replace);
 }
 
 export function onPopState(host: SettingsHost) {
@@ -340,6 +360,7 @@ function applyTabSelection(
   next: Tab,
   options: { refreshPolicy: "always" | "connected"; syncUrl?: boolean },
 ) {
+  next = resolveAllowedTab(host, next);
   if (host.tab !== next) {
     host.tab = next;
   }
@@ -364,6 +385,11 @@ function applyTabSelection(
   if (options.syncUrl) {
     syncUrlWithTab(host, next, false);
   }
+}
+
+function resolveAllowedTab(host: SettingsHost, next: Tab): Tab {
+  const role = host.authViewer?.role ?? null;
+  return isTabAllowedForRole(next, role) ? next : "chat";
 }
 
 export function syncUrlWithTab(host: SettingsHost, tab: Tab, replace: boolean) {

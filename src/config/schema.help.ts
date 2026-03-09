@@ -75,6 +75,32 @@ export const FIELD_HELP: Record<string, string> = {
     "Control UI hosting settings including enablement, pathing, and browser-origin/auth hardening behavior. Keep UI exposure minimal and pair with strong auth controls before internet-facing deployments.",
   "gateway.controlUi.enabled":
     "Enables serving the gateway Control UI from the gateway HTTP process when true. Keep enabled for local administration, and disable when an external control surface replaces it.",
+  "gateway.controlUi.localAuth":
+    "Local username/password auth settings for Control UI sessions, including cookie signing and per-user role/agent/channel scope. Enable this when multiple web users need explicit account boundaries on one gateway.",
+  "gateway.controlUi.localAuth.enabled":
+    "Enables local account login for the Control UI when true. Keep disabled until user accounts and session secret are fully configured.",
+  "gateway.controlUi.localAuth.sessionSecret":
+    "Secret used to sign Control UI local-auth session cookies. Set a strong random value and rotate with planned logout windows.",
+  "gateway.controlUi.localAuth.sessionTtlHours":
+    "Session lifetime in hours for local-auth cookies (default: 24). Use shorter TTLs for shared/admin environments.",
+  "gateway.controlUi.localAuth.users":
+    "Configured local Control UI user accounts with role, password hash, default agent, and allowed channel/account scope.",
+  "gateway.controlUi.localAuth.users[].username":
+    "Unique local login username for Control UI authentication (case-insensitive uniqueness).",
+  "gateway.controlUi.localAuth.users[].passwordHash":
+    "Argon2id password hash (PHC format) for this local Control UI user.",
+  "gateway.controlUi.localAuth.users[].role":
+    'Control UI role for this user: "admin" for global management, or "user" for scoped usage.',
+  "gateway.controlUi.localAuth.users[].agentId":
+    "Primary agent id assigned to this user for one-user-one-agent routing defaults.",
+  "gateway.controlUi.localAuth.users[].allowedChannels":
+    "Optional channel/account allowlist for this user when sending via Control UI.",
+  "gateway.controlUi.localAuth.users[].allowedChannels[].channel":
+    "Channel id this user is allowed to use from Control UI.",
+  "gateway.controlUi.localAuth.users[].allowedChannels[].accountId":
+    "Optional channel account id scope for this allowed channel entry.",
+  "gateway.controlUi.localAuth.users[].disabled":
+    "If true, this local user cannot log in while the account definition remains in config.",
   "gateway.auth":
     "Authentication policy for gateway HTTP/WebSocket access including mode, credentials, trusted-proxy behavior, and rate limiting. Keep auth enabled for every non-loopback deployment.",
   "gateway.auth.mode":

@@ -32,6 +32,7 @@ import { usageHandlers } from "./server-methods/usage.js";
 import { voicewakeHandlers } from "./server-methods/voicewake.js";
 import { webHandlers } from "./server-methods/web.js";
 import { wizardHandlers } from "./server-methods/wizard.js";
+import { authorizeAndRewriteUserMethod } from "./user-authz.js";
 
 const CONTROL_PLANE_WRITE_METHODS = new Set(["config.apply", "config.patch", "update.run"]);
 function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["client"]) {
@@ -97,7 +98,13 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
 export async function handleGatewayRequest(
   opts: GatewayRequestOptions & { extraHandlers?: GatewayRequestHandlers },
 ): Promise<void> {
-  const { req, respond, client, isWebchatConnect, context } = opts;
+  const { respond, client, isWebchatConnect, context } = opts;
+  const userAuthz = authorizeAndRewriteUserMethod({ req: opts.req, client });
+  if (!userAuthz.ok) {
+    respond(false, undefined, userAuthz.error);
+    return;
+  }
+  const req = userAuthz.req;
   const authError = authorizeGatewayMethod(req.method, client);
   if (authError) {
     respond(false, undefined, authError);
@@ -138,12 +145,21 @@ export async function handleGatewayRequest(
     );
     return;
   }
+  const respondWithFilter = (
+    ok: boolean,
+    payload?: unknown,
+    error?: Parameters<typeof respond>[2],
+    meta?: Parameters<typeof respond>[3],
+  ) => {
+    const nextPayload = ok ? userAuthz.filterPayload(req.method, payload) : payload;
+    respond(ok, nextPayload, error, meta);
+  };
   await handler({
     req,
     params: (req.params ?? {}) as Record<string, unknown>,
     client,
     isWebchatConnect,
-    respond,
+    respond: respondWithFilter,
     context,
   });
 }

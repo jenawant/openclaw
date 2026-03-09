@@ -65,7 +65,12 @@ import {
 } from "./controllers/skills.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
-import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
+import {
+  normalizeBasePath,
+  resolveVisibleTabGroups,
+  subtitleForTab,
+  titleForTab,
+} from "./navigation.ts";
 import { resolveConfiguredCronModelSuggestions, sortLocaleStrings } from "./views/agents-utils.ts";
 import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
@@ -78,12 +83,16 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.t
 import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
+import { renderOnboarding } from "./views/onboarding.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
+import { renderUsers } from "./views/users.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
+const BRAND_TITLE = import.meta.env.VITE_OPENCLAW_BRAND_TITLE?.trim() || "OPENCLAW";
+const BRAND_SUB = import.meta.env.VITE_OPENCLAW_BRAND_SUB?.trim() || "Gateway Dashboard";
 const CRON_THINKING_SUGGESTIONS = ["off", "minimal", "low", "medium", "high"];
 const CRON_TIMEZONE_SUGGESTIONS = [
   "UTC",
@@ -139,6 +148,47 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
 }
 
 export function renderApp(state: AppViewState) {
+  if (state.authEnabled && !state.authViewer) {
+    return html`
+      <div class="shell shell--auth">
+        <main class="content auth-content">
+          <section class="auth-card">
+            <h1>${BRAND_TITLE}</h1>
+            <p class="page-sub">${BRAND_SUB}</p>
+            ${state.authError ? html`<div class="callout danger">${state.authError}</div>` : nothing}
+            <label class="field full">
+              <span>Username</span>
+              <input
+                type="text"
+                .value=${state.authUsername}
+                autocomplete="username"
+                @input=${(event: Event) =>
+                  (state.authUsername = (event.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="field full">
+              <span>Password</span>
+              <input
+                type="password"
+                .value=${state.authPassword}
+                autocomplete="current-password"
+                @input=${(event: Event) =>
+                  (state.authPassword = (event.target as HTMLInputElement).value)}
+                @keydown=${(event: KeyboardEvent) => {
+                  if (event.key === "Enter" && !state.authLoading) {
+                    void state.loginControlUi();
+                  }
+                }}
+              />
+            </label>
+            <button class="btn primary" ?disabled=${state.authLoading} @click=${() => void state.loginControlUi()}>
+              ${state.authLoading ? "Signing in..." : "Sign in"}
+            </button>
+          </section>
+        </main>
+      </div>
+    `;
+  }
   const openClawVersion =
     (typeof state.hello?.server?.version === "string" && state.hello.server.version.trim()) ||
     state.updateAvailable?.currentVersion ||
@@ -219,6 +269,7 @@ export function renderApp(state: AppViewState) {
     state.cronForm.deliveryMode === "webhook"
       ? rawDeliveryToSuggestions.filter((value) => isHttpUrl(value))
       : rawDeliveryToSuggestions;
+  const visibleTabGroups = resolveVisibleTabGroups(state.authViewer?.role ?? null);
 
   return html`
     <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}">
@@ -241,8 +292,8 @@ export function renderApp(state: AppViewState) {
               <img src=${basePath ? `${basePath}/favicon.svg` : "/favicon.svg"} alt="OpenClaw" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">OPENCLAW</div>
-              <div class="brand-sub">Gateway Dashboard</div>
+              <div class="brand-title">${BRAND_TITLE}</div>
+              <div class="brand-sub">${BRAND_SUB}</div>
             </div>
           </div>
         </div>
@@ -258,10 +309,17 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? t("common.ok") : t("common.offline")}</span>
           </div>
           ${renderThemeToggle(state)}
+          ${
+            state.authViewer
+              ? html`<button class="btn btn--sm" @click=${() => void state.logoutControlUi()}>
+                Sign out (${state.authViewer.username})
+              </button>`
+              : nothing
+          }
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">
-        ${TAB_GROUPS.map((group) => {
+        ${visibleTabGroups.map((group) => {
           const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
           const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
           return html`
@@ -1116,6 +1174,10 @@ export function renderApp(state: AppViewState) {
               })
             : nothing
         }
+
+        ${state.tab === "users" ? renderUsers(state) : nothing}
+
+        ${state.tab === "onboarding" ? renderOnboarding(state) : nothing}
 
         ${
           state.tab === "debug"

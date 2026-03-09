@@ -83,6 +83,11 @@ export type TalkConfig = {
 };
 
 export type GatewayControlUiConfig = {
+  /**
+   * Optional local-auth config for Control UI users (username/password).
+   * When enabled, Web UI users authenticate with local accounts.
+   */
+  localAuth?: GatewayControlUiLocalAuthConfig;
   /** If false, the Gateway will not serve the Control UI (default /). */
   enabled?: boolean;
   /** Optional base path prefix for the Control UI (e.g. "/openclaw"). */
@@ -104,6 +109,35 @@ export type GatewayControlUiConfig = {
   allowInsecureAuth?: boolean;
   /** DANGEROUS: Disable device identity checks for the Control UI (default: false). */
   dangerouslyDisableDeviceAuth?: boolean;
+};
+
+export type GatewayControlUiUserRole = "admin" | "user";
+
+export type GatewayControlUiAllowedChannel = {
+  channel: string;
+  accountId?: string;
+};
+
+export type GatewayControlUiLocalAuthUser = {
+  username: string;
+  /** Argon2id PHC string hash. */
+  passwordHash: string;
+  role: GatewayControlUiUserRole;
+  /** Default agent for this user (one user -> one primary agent). */
+  agentId: string;
+  /** Optional explicit channel/account bindings this user may use from Control UI. */
+  allowedChannels?: GatewayControlUiAllowedChannel[];
+  /** Disable login without deleting user config. */
+  disabled?: boolean;
+};
+
+export type GatewayControlUiLocalAuthConfig = {
+  enabled?: boolean;
+  /** HMAC secret used to sign local-auth session cookies. */
+  sessionSecret?: SecretInput;
+  /** Cookie session TTL in hours (default: 24). */
+  sessionTtlHours?: number;
+  users?: GatewayControlUiLocalAuthUser[];
 };
 
 export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";

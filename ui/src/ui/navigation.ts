@@ -1,6 +1,8 @@
 import { t } from "../i18n/index.ts";
 import type { IconName } from "./icons.js";
 
+export type ViewerRole = "admin" | "user";
+
 export const TAB_GROUPS = [
   { label: "chat", tabs: ["chat"] },
   {
@@ -8,7 +10,7 @@ export const TAB_GROUPS = [
     tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
   },
   { label: "agent", tabs: ["agents", "skills", "nodes"] },
-  { label: "settings", tabs: ["config", "debug", "logs"] },
+  { label: "settings", tabs: ["users", "onboarding", "config", "debug", "logs"] },
 ] as const;
 
 export type Tab =
@@ -22,6 +24,8 @@ export type Tab =
   | "skills"
   | "nodes"
   | "chat"
+  | "users"
+  | "onboarding"
   | "config"
   | "debug"
   | "logs";
@@ -37,6 +41,8 @@ const TAB_PATHS: Record<Tab, string> = {
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
+  users: "/users",
+  onboarding: "/onboarding",
   config: "/config",
   debug: "/debug",
   logs: "/logs",
@@ -147,6 +153,10 @@ export function iconForTab(tab: Tab): IconName {
       return "monitor";
     case "config":
       return "settings";
+    case "users":
+      return "settings";
+    case "onboarding":
+      return "loader";
     case "debug":
       return "bug";
     case "logs":
@@ -162,4 +172,23 @@ export function titleForTab(tab: Tab) {
 
 export function subtitleForTab(tab: Tab) {
   return t(`subtitles.${tab}`);
+}
+
+const USER_VISIBLE_TABS = new Set<Tab>(["chat", "channels", "sessions", "usage"]);
+
+export function isTabAllowedForRole(tab: Tab, role?: ViewerRole | null): boolean {
+  if (!role || role === "admin") {
+    return true;
+  }
+  return USER_VISIBLE_TABS.has(tab);
+}
+
+export function resolveVisibleTabGroups(role?: ViewerRole | null): Array<{
+  label: (typeof TAB_GROUPS)[number]["label"];
+  tabs: Tab[];
+}> {
+  return TAB_GROUPS.map((group) => ({
+    label: group.label,
+    tabs: group.tabs.filter((tab) => isTabAllowedForRole(tab, role)),
+  })).filter((group) => group.tabs.length > 0);
 }
