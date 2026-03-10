@@ -137,6 +137,17 @@ export type GatewayControlUiLocalAuthConfig = {
   sessionSecret?: SecretInput;
   /** Cookie session TTL in hours (default: 24). */
   sessionTtlHours?: number;
+  /**
+   * Auto-seed one admin account when auth DB is empty (default: true).
+   * Seed credentials are resolved from OPENCLAW_LOCALAUTH_ADMIN_* env vars.
+   */
+  seedAdminOnEmpty?: boolean;
+  /** Optional fallback admin username for first-run seeding (default: "admin"). */
+  seedAdminUsername?: string;
+  /**
+   * Legacy static user seed list.
+   * Kept for compatibility; SQLite-backed user management is preferred.
+   */
   users?: GatewayControlUiLocalAuthUser[];
 };
 

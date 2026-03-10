@@ -83,8 +83,12 @@ export const FIELD_HELP: Record<string, string> = {
     "Secret used to sign Control UI local-auth session cookies. Set a strong random value and rotate with planned logout windows.",
   "gateway.controlUi.localAuth.sessionTtlHours":
     "Session lifetime in hours for local-auth cookies (default: 24). Use shorter TTLs for shared/admin environments.",
+  "gateway.controlUi.localAuth.seedAdminOnEmpty":
+    "When true (default), OpenClaw auto-seeds one admin account if the Control UI auth SQLite DB is empty. Seed credentials are read from OPENCLAW_LOCALAUTH_ADMIN_* environment variables.",
+  "gateway.controlUi.localAuth.seedAdminUsername":
+    "Optional fallback admin username used during first-run auto-seeding when OPENCLAW_LOCALAUTH_ADMIN_USERNAME is not set (default: admin).",
   "gateway.controlUi.localAuth.users":
-    "Configured local Control UI user accounts with role, password hash, default agent, and allowed channel/account scope.",
+    "Legacy static user seed list for local Control UI accounts. Prefer SQLite-backed user management through the Control UI user settings.",
   "gateway.controlUi.localAuth.users[].username":
     "Unique local login username for Control UI authentication (case-insensitive uniqueness).",
   "gateway.controlUi.localAuth.users[].passwordHash":

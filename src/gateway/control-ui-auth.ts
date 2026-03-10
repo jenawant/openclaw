@@ -25,6 +25,11 @@ const AUTH_COOKIE_NAME = "openclaw-ui-auth";
 const AUTH_COOKIE_MAX_BYTES = 32 * 1024;
 const DEFAULT_SESSION_TTL_HOURS = 24;
 const SESSION_VERSION = 1;
+const LOCALAUTH_ADMIN_USERNAME_ENV = "OPENCLAW_LOCALAUTH_ADMIN_USERNAME";
+const LOCALAUTH_ADMIN_PASSWORD_ENV = "OPENCLAW_LOCALAUTH_ADMIN_PASSWORD";
+const LOCALAUTH_ADMIN_PASSWORD_HASH_ENV = "OPENCLAW_LOCALAUTH_ADMIN_PASSWORD_HASH";
+const LOCALAUTH_ADMIN_AGENT_ID_ENV = "OPENCLAW_LOCALAUTH_ADMIN_AGENT_ID";
+const seededAdminDbPaths = new Set<string>();
 
 export type ControlUiViewerRole = "admin" | "user";
 
@@ -46,6 +51,7 @@ type ControlUiSessionPayload = {
 type ControlUiAuthDeps = {
   nowMs?: () => number;
   verifyPassword?: (password: string, passwordHash: string) => Promise<boolean>;
+  hashPassword?: (password: string) => Promise<string>;
 };
 
 async function readAuthJsonBody(
@@ -132,6 +138,27 @@ function resolveSessionTtlHours(config: GatewayControlUiLocalAuthConfig | undefi
     return DEFAULT_SESSION_TTL_HOURS;
   }
   return Math.max(1, Math.min(24 * 30, Math.trunc(raw)));
+}
+
+function shouldSeedDefaultAdmin(config: GatewayControlUiLocalAuthConfig | undefined): boolean {
+  return config?.seedAdminOnEmpty !== false;
+}
+
+function resolveSeedAdminUsername(config: GatewayControlUiLocalAuthConfig | undefined): string {
+  const fromEnv = process.env[LOCALAUTH_ADMIN_USERNAME_ENV]?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  const fromConfig = config?.seedAdminUsername?.trim();
+  if (fromConfig) {
+    return fromConfig;
+  }
+  return "admin";
+}
+
+function resolveSeedAdminAgentId(): string {
+  const fromEnv = process.env[LOCALAUTH_ADMIN_AGENT_ID_ENV]?.trim().toLowerCase();
+  return fromEnv || "main";
 }
 
 function base64urlEncode(input: string): string {
@@ -398,6 +425,76 @@ async function hashArgon2idPassword(password: string): Promise<string> {
   }
 }
 
+async function ensureDefaultAdminSeeded(params: {
+  cfg: OpenClawConfig;
+  deps: ControlUiAuthDeps;
+}): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+    }
+> {
+  const localAuth = resolveLocalAuthConfig(params.cfg);
+  if (localAuth?.enabled !== true || !shouldSeedDefaultAdmin(localAuth)) {
+    return { ok: true };
+  }
+
+  const dbPath = resolveControlUiAuthDbPathForDisplay();
+  if (seededAdminDbPaths.has(dbPath)) {
+    return { ok: true };
+  }
+
+  let users: ReturnType<typeof listControlUiAuthDbUsers>;
+  try {
+    users = listControlUiAuthDbUsers(params.cfg);
+  } catch (error) {
+    return { ok: false, error: `auth db unavailable: ${String(error)}` };
+  }
+  if (users.length > 0) {
+    seededAdminDbPaths.add(dbPath);
+    return { ok: true };
+  }
+
+  const password = process.env[LOCALAUTH_ADMIN_PASSWORD_ENV]?.trim() ?? "";
+  const passwordHashFromEnv = process.env[LOCALAUTH_ADMIN_PASSWORD_HASH_ENV]?.trim() ?? "";
+  let passwordHash = passwordHashFromEnv;
+  if (password) {
+    try {
+      const hasher = params.deps.hashPassword ?? hashArgon2idPassword;
+      passwordHash = await hasher(password);
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  }
+  if (!passwordHash) {
+    return {
+      ok: false,
+      error:
+        `local auth is enabled and auth DB is empty; set ${LOCALAUTH_ADMIN_PASSWORD_ENV} ` +
+        `or ${LOCALAUTH_ADMIN_PASSWORD_HASH_ENV} before first login`,
+    };
+  }
+  try {
+    upsertControlUiAuthDbUser({
+      cfg: params.cfg,
+      user: {
+        username: resolveSeedAdminUsername(localAuth),
+        passwordHash,
+        role: "admin",
+        agentId: resolveSeedAdminAgentId(),
+        mainSessionKey: "main",
+        allowedChannels: [],
+        disabled: false,
+      },
+    });
+  } catch (error) {
+    return { ok: false, error: `auth db unavailable: ${String(error)}` };
+  }
+  seededAdminDbPaths.add(dbPath);
+  return { ok: true };
+}
+
 export function resolveControlUiViewerFromRequest(params: {
   req: IncomingMessage;
   cfg: OpenClawConfig;
@@ -455,6 +552,11 @@ export async function handleControlUiAuthHttpRequest(params: {
   }
 
   const deps = params.deps ?? {};
+  const seedStatus = await ensureDefaultAdminSeeded({ cfg, deps });
+  if (!seedStatus.ok) {
+    sendJson(res, 503, { ok: false, error: seedStatus.error });
+    return true;
+  }
   const nowMs = deps.nowMs?.() ?? Date.now();
   const sessionSecret = resolveSessionSecret(cfg);
   if (!sessionSecret) {
@@ -701,7 +803,7 @@ export async function handleControlUiAuthHttpRequest(params: {
       }
     }
     if (!resolvedPasswordHash) {
-      sendJson(res, 400, { ok: false, error: "passwordHash required for new users" });
+      sendJson(res, 400, { ok: false, error: "password required for new users" });
       return true;
     }
     try {

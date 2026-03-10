@@ -610,6 +610,8 @@ export const OpenClawSchema = z
                   .min(1)
                   .max(24 * 30)
                   .optional(),
+                seedAdminOnEmpty: z.boolean().optional(),
+                seedAdminUsername: z.string().min(1).optional(),
                 users: z
                   .array(
                     z

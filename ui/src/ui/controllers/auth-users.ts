@@ -35,7 +35,6 @@ export type AuthUsersState = {
     mainSessionKey: string;
     agentModel: string;
     password: string;
-    passwordHash: string;
     disabled: boolean;
     allowedChannelsText: string;
   };
@@ -293,7 +292,6 @@ export function selectAuthUser(state: AuthUsersState, username: string | null) {
       mainSessionKey: "main",
       agentModel: "",
       password: "",
-      passwordHash: "",
       disabled: false,
       allowedChannelsText: "",
     };
@@ -316,7 +314,6 @@ export function selectAuthUser(state: AuthUsersState, username: string | null) {
     mainSessionKey: entry.mainSessionKey || "main",
     agentModel: "",
     password: "",
-    passwordHash: "",
     disabled: entry.disabled,
     allowedChannelsText: formatAllowedChannelsText(entry.allowedChannels ?? []),
   };
@@ -379,7 +376,6 @@ export async function saveAuthUser(state: AuthUsersState): Promise<boolean> {
       workspace: state.authUsersForm.workspace.trim(),
       agentDir: state.authUsersForm.agentDir.trim(),
       mainSessionKey: state.authUsersForm.mainSessionKey.trim(),
-      passwordHash: state.authUsersForm.passwordHash.trim(),
       password: state.authUsersForm.password,
       disabled: state.authUsersForm.disabled,
       allowedChannels: parseAllowedChannelsText(state.authUsersForm.allowedChannelsText),

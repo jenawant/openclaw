@@ -113,10 +113,16 @@ function seedUsersIfNeeded(params: {
   if (seededDbPaths.has(params.dbPath)) {
     return;
   }
+  const countRow = params.db.prepare(`SELECT COUNT(*) AS total FROM users`).get() as
+    | { total?: number }
+    | undefined;
+  if ((countRow?.total ?? 0) > 0) {
+    seededDbPaths.add(params.dbPath);
+    return;
+  }
   const localAuth = resolveLocalAuthConfig(params.cfg);
   const users = localAuth?.users ?? [];
   if (users.length === 0) {
-    seededDbPaths.add(params.dbPath);
     return;
   }
   const nowMs = Date.now();

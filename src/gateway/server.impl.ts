@@ -108,6 +108,7 @@ import {
 } from "./server/health-state.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { ensureGatewayStartupAuth } from "./startup-auth.js";
+import { maybeSeedControlUiLocalAuthAtStartup } from "./startup-control-ui-local-auth.js";
 import { maybeSeedControlUiAllowedOriginsAtStartup } from "./startup-control-ui-origins.js";
 
 export { __resetModelCatalogCacheForTest } from "./server-model-catalog.js";
@@ -405,6 +406,12 @@ export async function startGatewayServer(
       activate: true,
     })
   ).config;
+  cfgAtStart = await maybeSeedControlUiLocalAuthAtStartup({
+    config: cfgAtStart,
+    writeConfig: writeConfigFile,
+    log,
+    env: process.env,
+  });
   const diagnosticsEnabled = isDiagnosticsEnabled(cfgAtStart);
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat();

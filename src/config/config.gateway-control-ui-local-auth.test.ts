@@ -11,6 +11,8 @@ describe("gateway.controlUi.localAuth", () => {
             enabled: true,
             sessionSecret: "secret-1",
             sessionTtlHours: 24,
+            seedAdminOnEmpty: true,
+            seedAdminUsername: "admin",
             users: [
               {
                 username: "admin",
@@ -67,5 +69,21 @@ describe("gateway.controlUi.localAuth", () => {
     expect(schema.uiHints["gateway.controlUi.localAuth.users[].passwordHash"]?.sensitive).toBe(
       true,
     );
+  });
+
+  it("accepts auto-seed settings without static users", () => {
+    const result = validateConfigObject({
+      gateway: {
+        controlUi: {
+          localAuth: {
+            enabled: true,
+            sessionSecret: "secret-1",
+            seedAdminOnEmpty: true,
+            seedAdminUsername: "bootstrap-admin",
+          },
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
   });
 });

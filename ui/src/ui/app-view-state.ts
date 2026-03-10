@@ -149,7 +149,6 @@ export type AppViewState = {
     mainSessionKey: string;
     agentModel: string;
     password: string;
-    passwordHash: string;
     disabled: boolean;
     allowedChannelsText: string;
   };

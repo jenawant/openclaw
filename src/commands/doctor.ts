@@ -29,6 +29,7 @@ import {
 import { noteBootstrapFileSize } from "./doctor-bootstrap-size.js";
 import { doctorShellCompletion } from "./doctor-completion.js";
 import { loadAndMaybeMigrateDoctorConfig } from "./doctor-config-flow.js";
+import { buildControlUiLocalAuthDoctorNote } from "./doctor-control-ui-auth.js";
 import { maybeRepairGatewayDaemon } from "./doctor-gateway-daemon-flow.js";
 import { checkGatewayHealth, probeGatewayMemoryStatus } from "./doctor-gateway-health.js";
 import {
@@ -202,6 +203,10 @@ export async function doctorCommand(
   await noteMacLaunchctlGatewayEnvOverrides(cfg);
 
   await noteSecurityWarnings(cfg);
+  const localAuthNote = buildControlUiLocalAuthDoctorNote(cfg);
+  if (localAuthNote) {
+    note(localAuthNote.body, localAuthNote.title);
+  }
   await noteOpenAIOAuthTlsPrerequisites({
     cfg,
     deep: options.deep === true,

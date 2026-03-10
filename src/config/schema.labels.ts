@@ -70,6 +70,8 @@ export const FIELD_LABELS: Record<string, string> = {
   "gateway.controlUi.localAuth.enabled": "Control UI Local Auth Enabled",
   "gateway.controlUi.localAuth.sessionSecret": "Control UI Session Secret",
   "gateway.controlUi.localAuth.sessionTtlHours": "Control UI Session TTL (hours)",
+  "gateway.controlUi.localAuth.seedAdminOnEmpty": "Control UI Seed Admin On Empty DB",
+  "gateway.controlUi.localAuth.seedAdminUsername": "Control UI Seed Admin Username",
   "gateway.controlUi.localAuth.users": "Control UI User Accounts",
   "gateway.controlUi.localAuth.users[].username": "Control UI Username",
   "gateway.controlUi.localAuth.users[].passwordHash": "Control UI Password Hash",

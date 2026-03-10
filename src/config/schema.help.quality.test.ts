@@ -107,6 +107,8 @@ const TARGET_KEYS = [
   "gateway.controlUi.localAuth.enabled",
   "gateway.controlUi.localAuth.sessionSecret",
   "gateway.controlUi.localAuth.sessionTtlHours",
+  "gateway.controlUi.localAuth.seedAdminOnEmpty",
+  "gateway.controlUi.localAuth.seedAdminUsername",
   "gateway.controlUi.localAuth.users",
   "gateway.controlUi.localAuth.users[].username",
   "gateway.controlUi.localAuth.users[].passwordHash",

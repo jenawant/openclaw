@@ -245,7 +245,6 @@ export class OpenClawApp extends LitElement {
     mainSessionKey: string;
     agentModel: string;
     password: string;
-    passwordHash: string;
     disabled: boolean;
     allowedChannelsText: string;
   } = {
@@ -257,7 +256,6 @@ export class OpenClawApp extends LitElement {
     mainSessionKey: "main",
     agentModel: "",
     password: "",
-    passwordHash: "",
     disabled: false,
     allowedChannelsText: "",
   };
