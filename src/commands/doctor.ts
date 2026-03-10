@@ -31,6 +31,7 @@ import {
 import { noteBootstrapFileSize } from "./doctor-bootstrap-size.js";
 import { doctorShellCompletion } from "./doctor-completion.js";
 import { loadAndMaybeMigrateDoctorConfig } from "./doctor-config-flow.js";
+import { buildControlUiLocalAuthDoctorNote } from "./doctor-control-ui-auth.js";
 import { maybeRepairLegacyCronStore } from "./doctor-cron.js";
 import { buildControlUiLocalAuthDoctorNote } from "./doctor-control-ui-auth.js";
 import { maybeRepairGatewayDaemon } from "./doctor-gateway-daemon-flow.js";

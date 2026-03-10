@@ -109,6 +109,7 @@ import {
 } from "./server/health-state.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
+import { maybeSeedControlUiLocalAuthAtStartup } from "./startup-control-ui-local-auth.js";
 import {
   ensureGatewayStartupAuth,
   mergeGatewayAuthConfig,
