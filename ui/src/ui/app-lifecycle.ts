@@ -27,6 +27,16 @@ type LifecycleHost = {
   assistantName: string;
   assistantAvatar: string | null;
   assistantAgentId: string | null;
+  authLoading: boolean;
+  authEnabled: boolean;
+  authViewer: import("./controllers/auth.ts").AuthViewer | null;
+  authError: string | null;
+  authUsername: string;
+  authPassword: string;
+  settings: import("./storage.ts").UiSettings;
+  sessionKey: string;
+  applySettings: (next: import("./storage.ts").UiSettings) => void;
+  connect: () => void;
   serverVersion: string | null;
   authLoading: boolean;
   authEnabled: boolean;
@@ -60,6 +70,7 @@ export function handleConnected(host: LifecycleHost) {
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   attachThemeListener(host as unknown as Parameters<typeof attachThemeListener>[0]);
   window.addEventListener("popstate", host.popStateHandler);
+  void bootstrapAuthAndMaybeConnect(host);
   void bootstrapReady.finally(() => {
     if (host.connectGeneration !== connectGeneration) {
       return;

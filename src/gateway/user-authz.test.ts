@@ -39,7 +39,7 @@ describe("authorizeAndRewriteUserMethod", () => {
       return;
     }
     expect((outcome.req.params as { sessionKey?: string }).sessionKey).toBe("agent:agent-a:home");
-    expect((outcome.req.params as { agentId?: string }).agentId).toBe("agent-a");
+    expect((outcome.req.params as { agentId?: string }).agentId).toBeUndefined();
   });
 
   it("filters agents.list payload to only the user's agent", () => {
