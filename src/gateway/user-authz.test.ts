@@ -42,6 +42,42 @@ describe("authorizeAndRewriteUserMethod", () => {
     expect((outcome.req.params as { agentId?: string }).agentId).toBeUndefined();
   });
 
+  it("rewrites explicit unscoped main session key to the user's scoped main key", () => {
+    const outcome = authorizeAndRewriteUserMethod({
+      req: {
+        type: "req",
+        id: "1",
+        method: "chat.history",
+        params: { sessionKey: "main", limit: 50 },
+      },
+      client: baseClient(),
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) {
+      return;
+    }
+    expect((outcome.req.params as { sessionKey?: string }).sessionKey).toBe("agent:agent-a:home");
+  });
+
+  it("rewrites explicit unscoped custom session key into the user's agent namespace", () => {
+    const outcome = authorizeAndRewriteUserMethod({
+      req: {
+        type: "req",
+        id: "1",
+        method: "chat.history",
+        params: { sessionKey: "incident-123", limit: 50 },
+      },
+      client: baseClient(),
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) {
+      return;
+    }
+    expect((outcome.req.params as { sessionKey?: string }).sessionKey).toBe(
+      "agent:agent-a:incident-123",
+    );
+  });
+
   it("filters agents.list payload to only the user's agent", () => {
     const outcome = authorizeAndRewriteUserMethod({
       req: { type: "req", id: "1", method: "agents.list", params: {} },

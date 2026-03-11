@@ -1,10 +1,10 @@
 import {
+  startDebugPolling,
   startLogsPolling,
   startNodesPolling,
+  stopDebugPolling,
   stopLogsPolling,
   stopNodesPolling,
-  startDebugPolling,
-  stopDebugPolling,
 } from "./app-polling.ts";
 import { observeTopbar, scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import {
@@ -21,6 +21,7 @@ import type { Tab } from "./navigation.ts";
 
 type LifecycleHost = {
   basePath: string;
+  connectGeneration: number;
   client?: { stop: () => void } | null;
   connected?: boolean;
   tab: Tab;
@@ -38,16 +39,6 @@ type LifecycleHost = {
   applySettings: (next: import("./storage.ts").UiSettings) => void;
   connect: () => void;
   serverVersion: string | null;
-  authLoading: boolean;
-  authEnabled: boolean;
-  authViewer: import("./controllers/auth.ts").AuthViewer | null;
-  authError: string | null;
-  authUsername: string;
-  authPassword: string;
-  settings: import("./storage.ts").UiSettings;
-  sessionKey: string;
-  applySettings: (next: import("./storage.ts").UiSettings) => void;
-  connect: () => void;
   chatHasAutoScrolled: boolean;
   chatManualRefreshInFlight: boolean;
   chatLoading: boolean;
@@ -65,19 +56,22 @@ export function handleConnected(host: LifecycleHost) {
   const connectGeneration = ++host.connectGeneration;
   host.basePath = inferBasePath();
   applySettingsFromUrl(host as unknown as Parameters<typeof applySettingsFromUrl>[0]);
-  const bootstrapReady = loadControlUiBootstrapConfig(host);
   syncTabWithLocation(host as unknown as Parameters<typeof syncTabWithLocation>[0], true);
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   attachThemeListener(host as unknown as Parameters<typeof attachThemeListener>[0]);
   window.addEventListener("popstate", host.popStateHandler);
-  void bootstrapAuthAndMaybeConnect(host);
-  void bootstrapReady.finally(() => {
-    if (host.connectGeneration !== connectGeneration) {
-      return;
-    }
-    connectGateway(host as unknown as Parameters<typeof connectGateway>[0]);
-  });
-  void bootstrapAuthAndMaybeConnect(host);
+
+  void loadControlUiBootstrapConfig(host)
+    .catch(() => {
+      // bootstrap is best-effort; auth bootstrap will surface concrete errors
+    })
+    .finally(() => {
+      if (host.connectGeneration !== connectGeneration) {
+        return;
+      }
+      void bootstrapAuthAndMaybeConnect(host);
+    });
+
   startNodesPolling(host as unknown as Parameters<typeof startNodesPolling>[0]);
   if (host.tab === "logs") {
     startLogsPolling(host as unknown as Parameters<typeof startLogsPolling>[0]);

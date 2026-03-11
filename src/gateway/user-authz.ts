@@ -115,6 +115,30 @@ function normalizeParams(params: unknown): Record<string, unknown> {
   return { ...(params as Record<string, unknown>) };
 }
 
+function resolveUserScopedSessionKey(params: {
+  viewer: ControlUiViewer;
+  rawSessionKey: string;
+}): string {
+  const trimmed = params.rawSessionKey.trim();
+  if (!trimmed) {
+    return buildAgentMainSessionKey({
+      agentId: params.viewer.agentId,
+      mainKey: params.viewer.mainSessionKey,
+    });
+  }
+  const parsed = parseAgentSessionKey(trimmed);
+  if (parsed?.agentId) {
+    return trimmed;
+  }
+  if (trimmed === "main" || trimmed === params.viewer.mainSessionKey) {
+    return buildAgentMainSessionKey({
+      agentId: params.viewer.agentId,
+      mainKey: params.viewer.mainSessionKey,
+    });
+  }
+  return `agent:${params.viewer.agentId}:${trimmed}`;
+}
+
 function isChannelAllowed(
   viewer: ControlUiViewer,
   channelRaw: unknown,
@@ -309,13 +333,11 @@ export function authorizeAndRewriteUserMethod(params: {
       };
     }
   }
-  if (
-    SESSION_SCOPED_METHODS.has(params.req.method) &&
-    (typeof nextParams.sessionKey !== "string" || !nextParams.sessionKey.trim())
-  ) {
-    nextParams.sessionKey = buildAgentMainSessionKey({
-      agentId: viewer.agentId,
-      mainKey: viewer.mainSessionKey,
+  if (SESSION_SCOPED_METHODS.has(params.req.method)) {
+    const rawSessionKey = typeof nextParams.sessionKey === "string" ? nextParams.sessionKey : "";
+    nextParams.sessionKey = resolveUserScopedSessionKey({
+      viewer,
+      rawSessionKey,
     });
   }
 

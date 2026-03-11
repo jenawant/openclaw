@@ -67,7 +67,12 @@ import {
 } from "./controllers/skills.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
-import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
+import {
+  normalizeBasePath,
+  resolveVisibleTabGroups,
+  subtitleForTab,
+  titleForTab,
+} from "./navigation.ts";
 import {
   resolveAgentConfig,
   resolveConfiguredCronModelSuggestions,
@@ -75,13 +80,6 @@ import {
   resolveModelPrimary,
   sortLocaleStrings,
 } from "./views/agents-utils.ts";
-import {
-  normalizeBasePath,
-  resolveVisibleTabGroups,
-  subtitleForTab,
-  titleForTab,
-} from "./navigation.ts";
-import { resolveConfiguredCronModelSuggestions, sortLocaleStrings } from "./views/agents-utils.ts";
 import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
@@ -334,7 +332,7 @@ export function renderApp(state: AppViewState) {
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">
-        ${TAB_GROUPS.map((group) => {
+        ${visibleTabGroups.map((group) => {
           const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
           const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
           return html`
@@ -1071,6 +1069,12 @@ export function renderApp(state: AppViewState) {
                 onDraftChange: (next) => (state.chatMessage = next),
                 attachments: state.chatAttachments,
                 onAttachmentsChange: (next) => (state.chatAttachments = next),
+                onFilePick: (files) => void state.addChatFiles?.(files),
+                voiceSupported: state.chatVoiceSupported ?? false,
+                voiceRecording: state.chatVoiceRecording ?? false,
+                onVoiceRecordStart: () => void state.startChatVoiceRecording?.(),
+                onVoiceRecordStop: () => void state.stopChatVoiceRecording?.(true),
+                onVoiceRecordCancel: () => void state.stopChatVoiceRecording?.(false),
                 onSend: () => state.handleSendChat(),
                 canAbort: Boolean(state.chatRunId),
                 onAbort: () => void state.handleAbortChat(),
