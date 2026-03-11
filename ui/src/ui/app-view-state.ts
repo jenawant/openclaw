@@ -75,6 +75,8 @@ export type AppViewState = {
   chatAvatarUrl: string | null;
   chatThinkingLevel: string | null;
   chatQueue: ChatQueueItem[];
+  chatVoiceSupported?: boolean;
+  chatVoiceRecording?: boolean;
   chatManualRefreshInFlight: boolean;
   nodesLoading: boolean;
   nodes: Array<Record<string, unknown>>;
@@ -360,6 +362,9 @@ export type AppViewState = {
     setPassword: (next: string) => void;
     setSessionKey: (next: string) => void;
     setChatMessage: (next: string) => void;
+    addChatFiles?: (files: readonly File[]) => Promise<void>;
+    startChatVoiceRecording?: () => Promise<void>;
+    stopChatVoiceRecording?: (send?: boolean) => Promise<void>;
     handleSendChat: (messageOverride?: string, opts?: { restoreDraft?: boolean }) => Promise<void>;
     handleAbortChat: () => Promise<void>;
     removeQueuedMessage: (id: string) => void;

@@ -1,6 +1,10 @@
 import type { ErrorObject } from "ajv";
 import { describe, expect, it } from "vitest";
-import { formatValidationErrors, validateTalkConfigResult } from "./index.js";
+import {
+  formatValidationErrors,
+  validateChatTranscribeParams,
+  validateTalkConfigResult,
+} from "./index.js";
 
 const makeError = (overrides: Partial<ErrorObject>): ErrorObject => ({
   keyword: "type",
@@ -113,6 +117,31 @@ describe("validateTalkConfigResult", () => {
             },
           },
         },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("validateChatTranscribeParams", () => {
+  it("accepts valid payload", () => {
+    expect(
+      validateChatTranscribeParams({
+        sessionKey: "main",
+        idempotencyKey: "run-1",
+        audio: {
+          content: Buffer.from("audio").toString("base64"),
+          mimeType: "audio/webm",
+          fileName: "voice.webm",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects payload missing audio", () => {
+    expect(
+      validateChatTranscribeParams({
+        sessionKey: "main",
+        idempotencyKey: "run-2",
       }),
     ).toBe(false);
   });

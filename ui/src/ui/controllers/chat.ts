@@ -51,6 +51,13 @@ export type ChatEventPayload = {
   errorMessage?: string;
 };
 
+export type ChatTranscribeAudioInput = {
+  content: string;
+  mimeType: string;
+  fileName?: string;
+  idempotencyKey: string;
+};
+
 function maybeResetToolStream(state: ChatState) {
   const toolHost = state as ChatState & Partial<Parameters<typeof resetToolStream>[0]>;
   if (
@@ -173,8 +180,15 @@ export async function sendChatMessage(
   // Add image previews to the message for display
   if (hasAttachments) {
     for (const att of attachments) {
+      const kind =
+        att.kind ??
+        (att.mimeType.startsWith("image/")
+          ? "image"
+          : att.mimeType.startsWith("audio/")
+            ? "audio"
+            : "file");
       contentBlocks.push({
-        type: "image",
+        type: kind,
         source: { type: "base64", media_type: att.mimeType, data: att.dataUrl },
       });
     }
@@ -205,9 +219,16 @@ export async function sendChatMessage(
             return null;
           }
           return {
-            type: "image",
+            type:
+              att.kind ??
+              (att.mimeType.startsWith("image/")
+                ? "image"
+                : att.mimeType.startsWith("audio/")
+                  ? "audio"
+                  : "file"),
             mimeType: parsed.mimeType,
             content: parsed.content,
+            fileName: att.fileName,
           };
         })
         .filter((a): a is NonNullable<typeof a> => a !== null)
@@ -239,6 +260,32 @@ export async function sendChatMessage(
     return null;
   } finally {
     state.chatSending = false;
+  }
+}
+
+export async function transcribeChatAudio(
+  state: ChatState,
+  audio: ChatTranscribeAudioInput,
+): Promise<string | null> {
+  if (!state.client || !state.connected) {
+    return null;
+  }
+  state.lastError = null;
+  try {
+    const res = await state.client.request<{ text?: string }>("chat.transcribe", {
+      sessionKey: state.sessionKey,
+      idempotencyKey: audio.idempotencyKey,
+      audio: {
+        content: audio.content,
+        mimeType: audio.mimeType,
+        fileName: audio.fileName,
+      },
+    });
+    const text = typeof res.text === "string" ? res.text.trim() : "";
+    return text || null;
+  } catch (err) {
+    state.lastError = String(err);
+    return null;
   }
 }
 

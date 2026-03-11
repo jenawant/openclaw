@@ -3,7 +3,13 @@ import { scheduleChatScroll } from "./app-scroll.ts";
 import { setLastActiveSessionKey } from "./app-settings.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
 import type { OpenClawApp } from "./app.ts";
-import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
+import {
+  abortChatRun,
+  loadChatHistory,
+  sendChatMessage,
+  transcribeChatAudio,
+  type ChatTranscribeAudioInput,
+} from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayHelloOk } from "./gateway.ts";
 import { normalizeBasePath } from "./navigation.ts";
@@ -200,6 +206,20 @@ export async function handleSendChat(
     restoreAttachments: Boolean(messageOverride && opts?.restoreDraft),
     refreshSessions,
   });
+}
+
+export async function handleVoiceTranscribeAndSend(
+  host: ChatHost,
+  audio: ChatTranscribeAudioInput,
+) {
+  if (!host.connected) {
+    return;
+  }
+  const text = await transcribeChatAudio(host as unknown as OpenClawApp, audio);
+  if (!text) {
+    return;
+  }
+  await handleSendChat(host, text, { restoreDraft: true });
 }
 
 export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: boolean }) {

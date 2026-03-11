@@ -17,6 +17,7 @@ import {
 import {
   handleAbortChat as handleAbortChatInternal,
   handleSendChat as handleSendChatInternal,
+  handleVoiceTranscribeAndSend as handleVoiceTranscribeAndSendInternal,
   removeQueuedMessage as removeQueuedMessageInternal,
 } from "./app-chat.ts";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
@@ -92,6 +93,13 @@ import type {
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
 import { generateUUID } from "./uuid.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
+import { filesToChatAttachments } from "./webchat-plus/attachments.ts";
+import {
+  canUseVoiceRecording,
+  startVoiceRecorder,
+  stopVoiceRecorder,
+  type VoiceRecorderSession,
+} from "./webchat-plus/voice.ts";
 
 declare global {
   interface Window {
@@ -145,6 +153,7 @@ export class OpenClawApp extends LitElement {
   private eventLogBuffer: EventLogEntry[] = [];
   private toolStreamSyncTimer: number | null = null;
   private sidebarCloseTimer: number | null = null;
+  private chatVoiceRecorder: VoiceRecorderSession | null = null;
 
   @state() assistantName = bootAssistantIdentity.name;
   @state() assistantAvatar = bootAssistantIdentity.avatar;
@@ -167,6 +176,8 @@ export class OpenClawApp extends LitElement {
   @state() chatThinkingLevel: string | null = null;
   @state() chatQueue: ChatQueueItem[] = [];
   @state() chatAttachments: ChatAttachment[] = [];
+  @state() chatVoiceSupported = canUseVoiceRecording();
+  @state() chatVoiceRecording = false;
   @state() chatManualRefreshInFlight = false;
   // Sidebar state for tool output viewing
   @state() sidebarOpen = false;
@@ -579,6 +590,57 @@ export class OpenClawApp extends LitElement {
       messageOverride,
       opts,
     );
+  }
+
+  async addChatFiles(files: readonly File[]) {
+    const { attachments, errors } = await filesToChatAttachments(files);
+    if (errors.length > 0) {
+      this.lastError = errors[0] ?? "Failed to add files";
+    }
+    if (attachments.length > 0) {
+      this.chatAttachments = [...this.chatAttachments, ...attachments];
+    }
+  }
+
+  async startChatVoiceRecording() {
+    if (!this.chatVoiceSupported || this.chatVoiceRecording) {
+      return;
+    }
+    try {
+      this.lastError = null;
+      this.chatVoiceRecorder = await startVoiceRecorder();
+      this.chatVoiceRecording = true;
+    } catch (err) {
+      this.chatVoiceRecorder = null;
+      this.chatVoiceRecording = false;
+      this.lastError = String(err);
+    }
+  }
+
+  async stopChatVoiceRecording(send = true) {
+    const active = this.chatVoiceRecorder;
+    this.chatVoiceRecorder = null;
+    this.chatVoiceRecording = false;
+    if (!active) {
+      return;
+    }
+    try {
+      const audio = await stopVoiceRecorder(active);
+      if (!send) {
+        return;
+      }
+      await handleVoiceTranscribeAndSendInternal(
+        this as unknown as Parameters<typeof handleVoiceTranscribeAndSendInternal>[0],
+        {
+          idempotencyKey: generateUUID(),
+          content: audio.content,
+          mimeType: audio.mimeType,
+          fileName: audio.fileName,
+        },
+      );
+    } catch (err) {
+      this.lastError = String(err);
+    }
   }
 
   async handleWhatsAppStart(force: boolean) {

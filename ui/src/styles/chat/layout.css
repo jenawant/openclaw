@@ -182,6 +182,40 @@
   object-fit: contain;
 }
 
+.chat-attachment__file {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+}
+
+.chat-attachment__file-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-dim);
+}
+
+.chat-attachment__file-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8px;
+}
+
+.chat-attachment__file-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-attachment__remove {
   position: absolute;
   top: 4px;
@@ -309,6 +343,10 @@
   display: flex;
   align-items: stretch;
   gap: 8px;
+}
+
+.chat-file-input {
+  display: none;
 }
 
 .chat-compose .chat-compose__actions .btn {

@@ -12,6 +12,7 @@ import { detectTextDirection } from "../text-direction.ts";
 import type { SessionsListResult } from "../types.ts";
 import type { ChatItem, MessageGroup } from "../types/chat-types.ts";
 import type { ChatAttachment, ChatQueueItem } from "../ui-types.ts";
+import { clipboardItemsToChatAttachments } from "../webchat-plus/attachments.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
 import "../components/resizable-divider.ts";
 
@@ -66,6 +67,12 @@ export type ChatProps = {
   // Image attachments
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
+  onFilePick?: (files: readonly File[]) => void;
+  voiceSupported?: boolean;
+  voiceRecording?: boolean;
+  onVoiceRecordStart?: () => void;
+  onVoiceRecordStop?: () => void;
+  onVoiceRecordCancel?: () => void;
   // Scroll control
   showNewMessages?: boolean;
   onScrollToBottom?: () => void;
@@ -159,49 +166,18 @@ function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefi
   `;
 }
 
-function generateAttachmentId(): string {
-  return `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function handlePaste(e: ClipboardEvent, props: ChatProps) {
+async function handlePaste(e: ClipboardEvent, props: ChatProps) {
   const items = e.clipboardData?.items;
   if (!items || !props.onAttachmentsChange) {
     return;
   }
-
-  const imageItems: DataTransferItem[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item.type.startsWith("image/")) {
-      imageItems.push(item);
-    }
-  }
-
-  if (imageItems.length === 0) {
+  const attachments = await clipboardItemsToChatAttachments(items);
+  if (attachments.length === 0) {
     return;
   }
-
   e.preventDefault();
-
-  for (const item of imageItems) {
-    const file = item.getAsFile();
-    if (!file) {
-      continue;
-    }
-
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      const dataUrl = reader.result as string;
-      const newAttachment: ChatAttachment = {
-        id: generateAttachmentId(),
-        dataUrl,
-        mimeType: file.type,
-      };
-      const current = props.attachments ?? [];
-      props.onAttachmentsChange?.([...current, newAttachment]);
-    });
-    reader.readAsDataURL(file);
-  }
+  const current = props.attachments ?? [];
+  props.onAttachmentsChange([...current, ...attachments]);
 }
 
 function renderAttachmentPreview(props: ChatProps) {
@@ -215,11 +191,24 @@ function renderAttachmentPreview(props: ChatProps) {
       ${attachments.map(
         (att) => html`
           <div class="chat-attachment">
-            <img
-              src=${att.dataUrl}
-              alt="Attachment preview"
-              class="chat-attachment__img"
-            />
+            ${
+              (att.kind ?? (att.mimeType.startsWith("image/") ? "image" : "file")) === "image"
+                ? html`
+                  <img
+                    src=${att.dataUrl}
+                    alt="Attachment preview"
+                    class="chat-attachment__img"
+                  />
+                `
+                : html`
+                  <div class="chat-attachment__file">
+                    <span class="chat-attachment__file-icon">
+                      ${att.kind === "audio" ? icons.radio : icons.fileText}
+                    </span>
+                    <span class="chat-attachment__file-name">${att.fileName ?? "attachment"}</span>
+                  </div>
+                `
+            }
             <button
               class="chat-attachment__remove"
               type="button"
@@ -253,9 +242,10 @@ export function renderChat(props: ChatProps) {
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
   const composePlaceholder = props.connected
     ? hasAttachments
-      ? "Add a message or paste more images..."
-      : "Message (↩ to send, Shift+↩ for line breaks, paste images)"
+      ? "Add a message, files, or voice..."
+      : "Message (↩ send, Shift+↩ newline, paste images, attach files)"
     : "Connect to the gateway to start chatting…";
+  let fileInputEl: HTMLInputElement | null = null;
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
@@ -459,6 +449,52 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
+            <input
+              ${ref((el) => (fileInputEl = el as HTMLInputElement))}
+              class="chat-file-input"
+              type="file"
+              multiple
+              accept="image/*,audio/*,.pdf,.txt,.md,.csv,.json,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+              @change=${(e: Event) => {
+                const target = e.target as HTMLInputElement;
+                const files = Array.from(target.files ?? []);
+                if (files.length > 0) {
+                  props.onFilePick?.(files);
+                }
+                target.value = "";
+              }}
+            />
+            <button
+              class="btn"
+              type="button"
+              ?disabled=${!props.connected}
+              title="Attach files"
+              @click=${() => fileInputEl?.click()}
+            >
+              ${icons.paperclip}
+            </button>
+            ${
+              props.voiceSupported
+                ? html`
+                  <button
+                    class="btn ${props.voiceRecording ? "danger" : ""}"
+                    type="button"
+                    ?disabled=${!props.connected}
+                    title=${props.voiceRecording ? "Release to transcribe" : "Hold to talk"}
+                    @pointerdown=${() => props.onVoiceRecordStart?.()}
+                    @pointerup=${() => props.onVoiceRecordStop?.()}
+                    @pointercancel=${() => props.onVoiceRecordCancel?.()}
+                    @pointerleave=${() => {
+                      if (props.voiceRecording) {
+                        props.onVoiceRecordCancel?.();
+                      }
+                    }}
+                  >
+                    ${icons.radio}
+                  </button>
+                `
+                : nothing
+            }
             <button
               class="btn"
               ?disabled=${!props.connected || (!canAbort && props.sending)}

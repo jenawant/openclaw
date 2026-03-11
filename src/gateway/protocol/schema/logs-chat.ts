@@ -58,6 +58,22 @@ export const ChatSendParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const ChatTranscribeParamsSchema = Type.Object(
+  {
+    sessionKey: ChatSendSessionKeyString,
+    idempotencyKey: NonEmptyString,
+    audio: Type.Object(
+      {
+        content: NonEmptyString,
+        mimeType: NonEmptyString,
+        fileName: Type.Optional(Type.String({ minLength: 1, maxLength: 255 })),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const ChatAbortParamsSchema = Type.Object(
   {
     sessionKey: NonEmptyString,

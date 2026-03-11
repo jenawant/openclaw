@@ -11,6 +11,9 @@ import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.j
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { resolveSessionFilePath } from "../../config/sessions.js";
 import { jsonUtf8Bytes } from "../../infra/json-utf8-bytes.js";
+import { transcribeAudioFile } from "../../media-understanding/transcribe-audio.js";
+import { estimateBase64DecodedBytes } from "../../media/base64.js";
+import { saveMediaBuffer } from "../../media/store.js";
 import { normalizeInputProvenance, type InputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { parseAgentSessionKey } from "../../sessions/session-key-utils.js";
@@ -31,7 +34,7 @@ import {
   isChatStopCommandText,
   resolveChatRunExpiresAtMs,
 } from "../chat-abort.js";
-import { type ChatImageContent, parseMessageWithAttachments } from "../chat-attachments.js";
+import type { ChatImageContent } from "../chat-attachments.js";
 import { stripEnvelopeFromMessage, stripEnvelopeFromMessages } from "../chat-sanitize.js";
 import {
   GATEWAY_CLIENT_CAPS,
@@ -47,6 +50,7 @@ import {
   validateChatHistoryParams,
   validateChatInjectParams,
   validateChatSendParams,
+  validateChatTranscribeParams,
 } from "../protocol/index.js";
 import { CHAT_SEND_SESSION_KEY_MAX_LENGTH } from "../protocol/schema/primitives.js";
 import { getMaxChatHistoryMessagesBytes } from "../server-constants.js";
@@ -56,6 +60,7 @@ import {
   readSessionMessages,
   resolveSessionModelRef,
 } from "../session-utils.js";
+import { resolveWebchatAttachments } from "../webchat-attachments.js";
 import { formatForLog } from "../ws-log.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 import { setGatewayDedupeEntry } from "./agent-wait-dedupe.js";
@@ -86,6 +91,7 @@ type AbortedPartialSnapshot = {
 const CHAT_HISTORY_TEXT_MAX_CHARS = 12_000;
 const CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES = 128 * 1024;
 const CHAT_HISTORY_OVERSIZED_PLACEHOLDER = "[chat.history omitted: message too large]";
+const CHAT_TRANSCRIBE_AUDIO_MAX_BYTES = 5_000_000;
 let chatHistoryPlaceholderEmitCount = 0;
 const CHANNEL_AGNOSTIC_SESSION_SCOPES = new Set([
   "main",
@@ -223,6 +229,16 @@ function stripDisallowedChatControlChars(message: string): string {
     }
   }
   return output;
+}
+
+function normalizeBase64Content(value: string): string {
+  const trimmed = value.trim();
+  const dataUrlMatch = /^data:[^;]+;base64,(.+)$/i.exec(trimmed);
+  return dataUrlMatch?.[1]?.trim() ?? trimmed;
+}
+
+function isValidBase64(value: string): boolean {
+  return value.length > 0 && value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
 }
 
 export function sanitizeChatSendMessageInput(
@@ -873,6 +889,99 @@ export const chatHandlers: GatewayRequestHandlers = {
       runIds: res.aborted ? [runId] : [],
     });
   },
+  "chat.transcribe": async ({ params, respond, context }) => {
+    if (!validateChatTranscribeParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.transcribe params: ${formatValidationErrors(validateChatTranscribeParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const p = params as {
+      sessionKey: string;
+      idempotencyKey: string;
+      audio: {
+        content: string;
+        mimeType: string;
+        fileName?: string;
+      };
+    };
+    const dedupeKey = `chat-transcribe:${p.idempotencyKey}`;
+    const cached = context.dedupe.get(dedupeKey);
+    if (cached) {
+      respond(cached.ok, cached.payload, cached.error, { cached: true });
+      return;
+    }
+
+    const rawBase64 = normalizeBase64Content(p.audio.content);
+    if (!isValidBase64(rawBase64)) {
+      const err = errorShape(ErrorCodes.INVALID_REQUEST, "audio.content must be valid base64");
+      setGatewayDedupeEntry({
+        dedupe: context.dedupe,
+        key: dedupeKey,
+        entry: { ts: Date.now(), ok: false, error: err },
+      });
+      respond(false, undefined, err);
+      return;
+    }
+    const audioSizeBytes = estimateBase64DecodedBytes(rawBase64);
+    if (audioSizeBytes <= 0 || audioSizeBytes > CHAT_TRANSCRIBE_AUDIO_MAX_BYTES) {
+      const err = errorShape(
+        ErrorCodes.INVALID_REQUEST,
+        `audio exceeds size limit (${audioSizeBytes} > ${CHAT_TRANSCRIBE_AUDIO_MAX_BYTES} bytes)`,
+      );
+      setGatewayDedupeEntry({
+        dedupe: context.dedupe,
+        key: dedupeKey,
+        entry: { ts: Date.now(), ok: false, error: err },
+      });
+      respond(false, undefined, err);
+      return;
+    }
+
+    const { cfg } = loadSessionEntry(p.sessionKey);
+    try {
+      const saved = await saveMediaBuffer(
+        Buffer.from(rawBase64, "base64"),
+        p.audio.mimeType,
+        "inbound",
+        CHAT_TRANSCRIBE_AUDIO_MAX_BYTES,
+        p.audio.fileName,
+      );
+      const transcribed = await transcribeAudioFile({
+        filePath: saved.path,
+        cfg,
+        mime: saved.contentType ?? p.audio.mimeType,
+      });
+      const text = (transcribed.text ?? "").trim();
+      const payload = {
+        text,
+        model: null,
+        durationMs: null,
+      };
+      setGatewayDedupeEntry({
+        dedupe: context.dedupe,
+        key: dedupeKey,
+        entry: { ts: Date.now(), ok: true, payload },
+      });
+      respond(true, payload);
+    } catch (err) {
+      const error = errorShape(
+        ErrorCodes.UNAVAILABLE,
+        `audio transcription failed: ${String(err)}`,
+      );
+      setGatewayDedupeEntry({
+        dedupe: context.dedupe,
+        key: dedupeKey,
+        entry: { ts: Date.now(), ok: false, error },
+      });
+      respond(false, undefined, error);
+    }
+  },
   "chat.send": async ({ params, respond, context, client }) => {
     if (!validateChatSendParams(params)) {
       respond(
@@ -942,14 +1051,19 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
     let parsedMessage = inboundMessage;
     let parsedImages: ChatImageContent[] = [];
+    let parsedMediaPaths: string[] = [];
+    let parsedMediaTypes: string[] = [];
     if (normalizedAttachments.length > 0) {
       try {
-        const parsed = await parseMessageWithAttachments(inboundMessage, normalizedAttachments, {
-          maxBytes: 5_000_000,
+        const parsed = await resolveWebchatAttachments({
+          message: inboundMessage,
+          attachments: normalizedAttachments,
           log: context.logGateway,
         });
         parsedMessage = parsed.message;
         parsedImages = parsed.images;
+        parsedMediaPaths = parsed.mediaPaths;
+        parsedMediaTypes = parsed.mediaTypes;
       } catch (err) {
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
         return;
@@ -1074,6 +1188,10 @@ export const chatHandlers: GatewayRequestHandlers = {
         SenderName: clientInfo?.displayName,
         SenderUsername: clientInfo?.displayName,
         GatewayClientScopes: client?.connect?.scopes,
+        MediaPaths: parsedMediaPaths.length > 0 ? parsedMediaPaths : undefined,
+        MediaTypes: parsedMediaTypes.length > 0 ? parsedMediaTypes : undefined,
+        MediaPath: parsedMediaPaths.length === 1 ? parsedMediaPaths[0] : undefined,
+        MediaType: parsedMediaTypes.length === 1 ? parsedMediaTypes[0] : undefined,
       };
 
       const agentId = resolveSessionAgentId({
